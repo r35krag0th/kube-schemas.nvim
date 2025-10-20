@@ -9,14 +9,52 @@ function M.setup(opts)
 	config.setup(opts)
 end
 
---- Parse the current buffer to extract apiVersion and kind
+--- Find the YAML document boundaries that contain the cursor
+---@return number|nil start_line The starting line of the document (0-indexed)
+---@return number|nil end_line The ending line of the document (0-indexed)
+local function find_document_bounds()
+	local cursor_line = vim.api.nvim_win_get_cursor(0)[1] - 1 -- Convert to 0-indexed
+	local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+	local start_line = 0
+	local end_line = #lines - 1
+
+	-- Find the start of the current document (look backward for ---)
+	for i = cursor_line, 0, -1 do
+		if lines[i + 1] and lines[i + 1]:match("^%-%-%-") then
+			start_line = i + 1 -- Start after the separator
+			break
+		end
+	end
+
+	-- Find the end of the current document (look forward for ---)
+	for i = cursor_line + 1, #lines - 1 do
+		if lines[i + 1] and lines[i + 1]:match("^%-%-%-") then
+			end_line = i - 1 -- End before the separator
+			break
+		end
+	end
+
+	return start_line, end_line
+end
+
+--- Parse the current YAML document to extract apiVersion and kind
+---@param start_line? number Starting line (0-indexed), defaults to document containing cursor
+---@param end_line? number Ending line (0-indexed), defaults to document containing cursor
 ---@return string|nil apiVersion
 ---@return string|nil kind
-local function parse_yaml_resource()
-	local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-	local api_version, kind
+---@return number|nil insert_line The line where modeline should be inserted (0-indexed)
+local function parse_yaml_resource(start_line, end_line)
+	-- If no bounds provided, find the document containing the cursor
+	if not start_line or not end_line then
+		start_line, end_line = find_document_bounds()
+	end
 
-	for _, line in ipairs(lines) do
+	local lines = vim.api.nvim_buf_get_lines(0, start_line, end_line + 1, false)
+	local api_version, kind
+	local insert_line = start_line
+
+	for i, line in ipairs(lines) do
 		-- Skip comments and empty lines
 		if not line:match("^%s*#") and not line:match("^%s*$") then
 			-- Match apiVersion
@@ -38,7 +76,7 @@ local function parse_yaml_resource()
 		end
 	end
 
-	return api_version, kind
+	return api_version, kind, insert_line
 end
 
 --- Find schema matching the given apiVersion and kind
@@ -47,7 +85,6 @@ end
 ---@param kind string The kind from YAML
 ---@return table|nil schema The matching schema, or nil if not found
 local function find_matching_schema(schema_list, api_version, kind)
-	-- Build search patterns
 	local kind_lower = kind:lower()
 	local group = ""
 	local version = api_version
@@ -55,29 +92,24 @@ local function find_matching_schema(schema_list, api_version, kind)
 	-- Split apiVersion into group and version (e.g., "apps/v1" -> "apps", "v1")
 	if api_version:match("/") then
 		group, version = api_version:match("^(.+)/(.+)$")
+		-- Normalize group (e.g., "networking.k8s.io" -> "networking")
+		group = group:gsub("%..*", "")
 	end
 
-	-- Try to find exact match
+	-- Build expected URL pattern
+	-- Pattern: {kind}-{group}-{version}.json for grouped resources
+	-- Pattern: {kind}-{version}.json for core resources
+	local url_pattern
+	if group ~= "" then
+		url_pattern = kind_lower .. "%-" .. group:lower() .. "%-" .. version .. "%.json$"
+	else
+		url_pattern = kind_lower .. "%-" .. version .. "%.json$"
+	end
+
+	-- Find exact match by URL pattern
 	for _, schema in ipairs(schema_list) do
-		local name_lower = schema.name:lower()
-		local url_lower = schema.url:lower()
-
-		-- Match pattern: kind matches and URL contains version info
-		if name_lower:find(kind_lower, 1, true) then
-			-- For core resources (no group), check if it's a core k8s resource
-			if group == "" and url_lower:match("kubernetes") and url_lower:match(version) then
-				return schema
-			end
-
-			-- For grouped resources, check if URL contains the group
-			if group ~= "" and url_lower:match(group:lower()) then
-				return schema
-			end
-
-			-- If version matches and no other match found, use this as fallback
-			if url_lower:match(version) then
-				return schema
-			end
+		if schema.url:lower():match(url_pattern) then
+			return schema
 		end
 	end
 
@@ -134,12 +166,12 @@ function M.perform_selection(query)
 	end)
 end
 
---- Auto-detect schema based on apiVersion and kind in current buffer
+--- Auto-detect schema based on apiVersion and kind in current YAML document
 function M.auto_detect()
-	local api_version, kind = parse_yaml_resource()
+	local api_version, kind, insert_line = parse_yaml_resource()
 
 	if not api_version or not kind then
-		vim.notify("Could not detect apiVersion and kind in current buffer", vim.log.levels.WARN)
+		vim.notify("Could not detect apiVersion and kind in current document", vim.log.levels.WARN)
 		return
 	end
 
@@ -157,9 +189,9 @@ function M.auto_detect()
 		return
 	end
 
-	-- Insert the modeline
+	-- Insert the modeline at the start of the current document
 	local modeline = "# yaml-language-server: $schema=" .. schema.url
-	vim.api.nvim_buf_set_lines(0, 0, 0, false, { modeline })
+	vim.api.nvim_buf_set_lines(0, insert_line, insert_line, false, { modeline })
 	vim.notify(string.format("Auto-inserted schema for %s/%s: %s", api_version, kind, schema.name), vim.log.levels.INFO)
 end
 

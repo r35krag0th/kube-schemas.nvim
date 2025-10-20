@@ -5,8 +5,10 @@ A Neovim plugin for managing Kubernetes YAML schema modelines. Automatically det
 ## Features
 
 - **Auto-detection**: Automatically detect the schema based on `apiVersion` and `kind` in your YAML file
+- **Multi-document support**: Works with files containing multiple YAML documents separated by `---`
 - **Manual search**: Browse and search through available Kubernetes schemas
 - **Filter support**: Pre-filter schemas by name or description
+- **Precise matching**: Deterministic schema matching based on exact API group, version, and kind
 - **Integration**: Works with your existing `vim.ui.select` backend (Telescope, fzf-lua, Snacks, etc.)
 - **Async fetching**: Uses plenary.curl for non-blocking HTTP requests
 
@@ -39,7 +41,7 @@ A Neovim plugin for managing Kubernetes YAML schema modelines. Automatically det
 
 ### Auto-detect schema
 
-Automatically detect the schema based on `apiVersion` and `kind` in the current buffer:
+Automatically detect the schema based on `apiVersion` and `kind` in the current YAML document. Place your cursor in the document you want to add a schema to and run:
 
 ```vim
 :KubeSchemas auto
@@ -59,6 +61,25 @@ metadata:
 Running `:KubeSchemas auto` will insert:
 
 ```yaml
+# yaml-language-server: $schema=https://schemas.r35.io/kubernetes/1.31/deployment-apps-v1.json
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+```
+
+**Multi-document support:**
+
+For files with multiple YAML documents, the plugin will detect the document containing your cursor and insert the schema modeline at the beginning of that specific document:
+
+```yaml
+---
+# yaml-language-server: $schema=https://schemas.r35.io/kubernetes/1.31/service-v1.json
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+---
 # yaml-language-server: $schema=https://schemas.r35.io/kubernetes/1.31/deployment-apps-v1.json
 apiVersion: apps/v1
 kind: Deployment

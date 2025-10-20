@@ -9,8 +9,10 @@ end
 
 -- Subcommand handlers
 local subcommands = {
-	search = function()
-		kube_schemas.perform_selection()
+	search = function(args)
+		-- Join remaining args as search query, or nil if empty
+		local query = #args > 0 and table.concat(args, " ") or nil
+		kube_schemas.perform_selection(query)
 	end,
 }
 
@@ -25,13 +27,15 @@ vim.api.nvim_create_user_command("KubeSchemas", function(opts)
 
 	local handler = subcommands[subcommand]
 	if handler then
-		handler()
+		-- Pass remaining args to handler
+		local args = vim.list_slice(opts.fargs, 2)
+		handler(args)
 	else
 		vim.notify("Unknown subcommand: " .. subcommand, vim.log.levels.ERROR)
 		vim.notify("Available subcommands: " .. table.concat(vim.tbl_keys(subcommands), ", "), vim.log.levels.INFO)
 	end
 end, {
-	nargs = "+",
+	nargs = "*",
 	complete = function(arg_lead, cmdline, _)
 		local parts = vim.split(cmdline, "%s+")
 

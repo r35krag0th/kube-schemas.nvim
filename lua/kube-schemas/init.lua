@@ -101,8 +101,10 @@ function M.perform_selection(query)
 		local filtered = {}
 		local lower_query = query:lower()
 		for _, schema in ipairs(schema_list) do
-			if schema.name:lower():find(lower_query, 1, true) or
-			   schema.description:lower():find(lower_query, 1, true) then
+			if
+				schema.name:lower():find(lower_query, 1, true)
+				or schema.description:lower():find(lower_query, 1, true)
+			then
 				table.insert(filtered, schema)
 			end
 		end
@@ -151,20 +153,14 @@ function M.auto_detect()
 	local schema = find_matching_schema(schema_list, api_version, kind)
 
 	if not schema then
-		vim.notify(
-			string.format("No schema found for %s (kind: %s)", api_version, kind),
-			vim.log.levels.WARN
-		)
+		vim.notify(string.format("No schema found for %s (kind: %s)", api_version, kind), vim.log.levels.WARN)
 		return
 	end
 
 	-- Insert the modeline
 	local modeline = "# yaml-language-server: $schema=" .. schema.url
 	vim.api.nvim_buf_set_lines(0, 0, 0, false, { modeline })
-	vim.notify(
-		string.format("Auto-inserted schema for %s/%s: %s", api_version, kind, schema.name),
-		vim.log.levels.INFO
-	)
+	vim.notify(string.format("Auto-inserted schema for %s/%s: %s", api_version, kind, schema.name), vim.log.levels.INFO)
 end
 
 return M

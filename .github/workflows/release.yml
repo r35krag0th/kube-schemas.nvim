@@ -1,0 +1,43 @@
+---
+name: Release
+on: # yamllint disable-line rule:truthy
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  pre-commit:
+    name: Pre-Commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+  semver:
+    name: "Create Release"
+    needs:
+      - pre-commit
+    outputs:
+      release-version: ${{ steps.semantic-release.outputs.release-version }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - id: semantic-release
+        uses: r35krag0th/action-semantic-release@v1
+        with:
+          dry_run: ${{ github.ref_name != 'main' }}
+          github_token: ${{ github.token }}

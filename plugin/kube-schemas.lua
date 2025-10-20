@@ -24,7 +24,10 @@ vim.api.nvim_create_user_command("KubeSchemas", function(opts)
 	local subcommand = opts.fargs[1]
 
 	if not subcommand then
-		vim.notify("KubeSchemas requires a subcommand. Available: " .. table.concat(vim.tbl_keys(subcommands), ", "), vim.log.levels.ERROR)
+		vim.notify(
+			"KubeSchemas requires a subcommand. Available: " .. table.concat(vim.tbl_keys(subcommands), ", "),
+			vim.log.levels.ERROR
+		)
 		return
 	end
 

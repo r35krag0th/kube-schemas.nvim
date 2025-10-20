@@ -1,22 +1,22 @@
--- We want to parse this "API" for schemas:
---
--- https://schemas.r35.io/api/json/catalog.json
 local api = require("kube-schemas.catalog_api")
+local config = require("kube-schemas.config")
 
 local M = {}
 
-M.options = {}
-M.defaults = {
-	catalog_url = "https://schemas.r35.io/api/json/catalog.json",
-}
-
+--- Setup the plugin with user options
+---@param opts? kube-schemas.Config
 function M.setup(opts)
-	M.options = vim.tbl_deep_extend("force", M.defaults, opts or {})
+	config.setup(opts)
 end
 
--- Activate the Picker UI using Snacks picker
+--- Activate the Picker UI to select and insert a schema modeline
 function M.perform_selection()
-	local schema_list = api.get_schema_list(M.options.catalog_url)
+	local schema_list = api.get_schema_list(config.options.catalog_url)
+
+	if #schema_list == 0 then
+		vim.notify("No schemas available", vim.log.levels.WARN)
+		return
+	end
 
 	vim.ui.select(schema_list, {
 		prompt = "Select a YAML schema",
@@ -24,9 +24,13 @@ function M.perform_selection()
 			return item.name
 		end,
 	}, function(selection)
+		if not selection then
+			return -- User cancelled
+		end
+
 		local modeline = "# yaml-language-server: $schema=" .. selection.url
 		vim.api.nvim_buf_set_lines(0, 0, 0, false, { modeline })
-		print("Inserted schema modeline for: " .. selection.name)
+		vim.notify("Inserted schema modeline for: " .. selection.name, vim.log.levels.INFO)
 	end)
 end
 

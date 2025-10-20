@@ -9,6 +9,81 @@ function M.setup(opts)
 	config.setup(opts)
 end
 
+--- Parse the current buffer to extract apiVersion and kind
+---@return string|nil apiVersion
+---@return string|nil kind
+local function parse_yaml_resource()
+	local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+	local api_version, kind
+
+	for _, line in ipairs(lines) do
+		-- Skip comments and empty lines
+		if not line:match("^%s*#") and not line:match("^%s*$") then
+			-- Match apiVersion
+			local av = line:match("^%s*apiVersion:%s*(.+)%s*$")
+			if av then
+				api_version = av
+			end
+
+			-- Match kind
+			local k = line:match("^%s*kind:%s*(.+)%s*$")
+			if k then
+				kind = k
+			end
+
+			-- Stop if we found both
+			if api_version and kind then
+				break
+			end
+		end
+	end
+
+	return api_version, kind
+end
+
+--- Find schema matching the given apiVersion and kind
+---@param schema_list table List of schemas
+---@param api_version string The apiVersion from YAML
+---@param kind string The kind from YAML
+---@return table|nil schema The matching schema, or nil if not found
+local function find_matching_schema(schema_list, api_version, kind)
+	-- Build search patterns
+	local kind_lower = kind:lower()
+	local group = ""
+	local version = api_version
+
+	-- Split apiVersion into group and version (e.g., "apps/v1" -> "apps", "v1")
+	if api_version:match("/") then
+		group, version = api_version:match("^(.+)/(.+)$")
+	end
+
+	-- Try to find exact match
+	for _, schema in ipairs(schema_list) do
+		local name_lower = schema.name:lower()
+		local url_lower = schema.url:lower()
+
+		-- Match pattern: kind matches and URL contains version info
+		if name_lower:find(kind_lower, 1, true) then
+			-- For core resources (no group), check if it's a core k8s resource
+			if group == "" and url_lower:match("kubernetes") and url_lower:match(version) then
+				return schema
+			end
+
+			-- For grouped resources, check if URL contains the group
+			if group ~= "" and url_lower:match(group:lower()) then
+				return schema
+			end
+
+			-- If version matches and no other match found, use this as fallback
+			if url_lower:match(version) then
+				return schema
+			end
+		end
+	end
+
+	return nil
+end
+
 --- Activate the Picker UI to select and insert a schema modeline
 ---@param query? string Optional search query to pre-populate the picker
 function M.perform_selection(query)
@@ -55,6 +130,41 @@ function M.perform_selection(query)
 		vim.api.nvim_buf_set_lines(0, 0, 0, false, { modeline })
 		vim.notify("Inserted schema modeline for: " .. selection.name, vim.log.levels.INFO)
 	end)
+end
+
+--- Auto-detect schema based on apiVersion and kind in current buffer
+function M.auto_detect()
+	local api_version, kind = parse_yaml_resource()
+
+	if not api_version or not kind then
+		vim.notify("Could not detect apiVersion and kind in current buffer", vim.log.levels.WARN)
+		return
+	end
+
+	local schema_list = api.get_schema_list(config.options.catalog_url)
+
+	if #schema_list == 0 then
+		vim.notify("No schemas available", vim.log.levels.WARN)
+		return
+	end
+
+	local schema = find_matching_schema(schema_list, api_version, kind)
+
+	if not schema then
+		vim.notify(
+			string.format("No schema found for %s (kind: %s)", api_version, kind),
+			vim.log.levels.WARN
+		)
+		return
+	end
+
+	-- Insert the modeline
+	local modeline = "# yaml-language-server: $schema=" .. schema.url
+	vim.api.nvim_buf_set_lines(0, 0, 0, false, { modeline })
+	vim.notify(
+		string.format("Auto-inserted schema for %s/%s: %s", api_version, kind, schema.name),
+		vim.log.levels.INFO
+	)
 end
 
 return M

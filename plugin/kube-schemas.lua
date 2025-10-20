@@ -14,6 +14,9 @@ local subcommands = {
 		local query = #args > 0 and table.concat(args, " ") or nil
 		kube_schemas.perform_selection(query)
 	end,
+	auto = function(args)
+		kube_schemas.auto_detect()
+	end,
 }
 
 -- Create the main command with subcommand support

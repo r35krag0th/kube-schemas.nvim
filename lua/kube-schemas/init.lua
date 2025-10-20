@@ -92,24 +92,38 @@ local function find_matching_schema(schema_list, api_version, kind)
 	-- Split apiVersion into group and version (e.g., "apps/v1" -> "apps", "v1")
 	if api_version:match("/") then
 		group, version = api_version:match("^(.+)/(.+)$")
-		-- Normalize group (e.g., "networking.k8s.io" -> "networking")
-		group = group:gsub("%..*", "")
 	end
 
-	-- Build expected URL pattern
-	-- Pattern: {kind}-{group}-{version}.json for grouped resources
-	-- Pattern: {kind}-{version}.json for core resources
-	local url_pattern
+	local url_patterns = {}
+
+	-- Build URL patterns to try
 	if group ~= "" then
-		url_pattern = kind_lower .. "%-" .. group:lower() .. "%-" .. version .. "%.json$"
+		-- For CRDs with full group domain (e.g., "cert-manager.io/v1")
+		-- Pattern 1: /crds/{group}/{kind}_{version}.json
+		table.insert(url_patterns, "/crds/" .. group:lower() .. "/" .. kind_lower .. "_" .. version .. "%.json$")
+
+		-- Pattern 2: /crds/master-standalone/{group}-stable-{kind}_{version}.json
+		table.insert(
+			url_patterns,
+			"/crds/master%-standalone/" .. group:lower() .. "%-stable%-" .. kind_lower .. "_" .. version .. "%.json$"
+		)
+
+		-- For core Kubernetes grouped resources (e.g., "apps/v1")
+		-- Pattern 3: {kind}-{group}-{version}.json
+		local group_short = group:gsub("%..*", "")
+		table.insert(url_patterns, kind_lower .. "%-" .. group_short:lower() .. "%-" .. version .. "%.json$")
 	else
-		url_pattern = kind_lower .. "%-" .. version .. "%.json$"
+		-- Core resources (v1, v1beta1, etc.)
+		-- Pattern: {kind}-{version}.json
+		table.insert(url_patterns, kind_lower .. "%-" .. version .. "%.json$")
 	end
 
-	-- Find exact match by URL pattern
-	for _, schema in ipairs(schema_list) do
-		if schema.url:lower():match(url_pattern) then
-			return schema
+	-- Try each pattern
+	for _, pattern in ipairs(url_patterns) do
+		for _, schema in ipairs(schema_list) do
+			if schema.url:lower():match(pattern) then
+				return schema
+			end
 		end
 	end
 

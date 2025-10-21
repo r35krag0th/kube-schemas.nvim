@@ -96,26 +96,47 @@ local function find_matching_schema(schema_list, api_version, kind)
 
 	local url_patterns = {}
 
+	-- Escape special pattern characters (dots, hyphens) for Lua pattern matching
+	local function escape_pattern(str)
+		return str:gsub("[%.%-]", "%%%1")
+	end
+
 	-- Build URL patterns to try
 	if group ~= "" then
+		local group_escaped = escape_pattern(group:lower())
+		local kind_escaped = escape_pattern(kind_lower)
+		local version_escaped = escape_pattern(version)
+
 		-- For CRDs with full group domain (e.g., "cert-manager.io/v1")
 		-- Pattern 1: /crds/{group}/{kind}_{version}.json
-		table.insert(url_patterns, "/crds/" .. group:lower() .. "/" .. kind_lower .. "_" .. version .. "%.json$")
+		table.insert(
+			url_patterns,
+			"/crds/" .. group_escaped .. "/" .. kind_escaped .. "_" .. version_escaped .. "%.json$"
+		)
 
 		-- Pattern 2: /crds/master-standalone/{group}-stable-{kind}_{version}.json
 		table.insert(
 			url_patterns,
-			"/crds/master%-standalone/" .. group:lower() .. "%-stable%-" .. kind_lower .. "_" .. version .. "%.json$"
+			"/crds/master%-standalone/"
+				.. group_escaped
+				.. "%-stable%-"
+				.. kind_escaped
+				.. "_"
+				.. version_escaped
+				.. "%.json$"
 		)
 
 		-- For core Kubernetes grouped resources (e.g., "apps/v1")
 		-- Pattern 3: {kind}-{group}-{version}.json
 		local group_short = group:gsub("%..*", "")
-		table.insert(url_patterns, kind_lower .. "%-" .. group_short:lower() .. "%-" .. version .. "%.json$")
+		local group_short_escaped = escape_pattern(group_short:lower())
+		table.insert(url_patterns, kind_escaped .. "%-" .. group_short_escaped .. "%-" .. version_escaped .. "%.json$")
 	else
 		-- Core resources (v1, v1beta1, etc.)
 		-- Pattern: {kind}-{version}.json
-		table.insert(url_patterns, kind_lower .. "%-" .. version .. "%.json$")
+		local kind_escaped = escape_pattern(kind_lower)
+		local version_escaped = escape_pattern(version)
+		table.insert(url_patterns, kind_escaped .. "%-" .. version_escaped .. "%.json$")
 	end
 
 	-- Try each pattern

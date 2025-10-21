@@ -155,6 +155,26 @@ The default catalog URL (`https://schemas.r35.io/api/json/catalog.json`) aggrega
 - **CRD Catalog**: [datreeio/CRDs-catalog](https://github.com/datreeio/CRDs-catalog) - Community-maintained JSON schemas for popular Kubernetes Custom Resource Definitions
 - **SchemaStore.org**: [SchemaStore/schemastore](https://github.com/SchemaStore/schemastore) - General-purpose JSON schema catalog
 
+## Development
+
+### Running Tests
+
+The plugin includes comprehensive unit tests that verify schema matching against the live catalog.
+
+```bash
+# Run tests once
+mise run test
+
+# Run tests in watch mode (requires entr)
+mise run test-watch
+```
+
+Tests cover:
+- Core Kubernetes resources (v1)
+- Grouped Kubernetes resources (apps/v1, batch/v1, networking.k8s.io/v1)
+- Custom Resource Definitions (CRDs) from popular tools (Flux, Istio, cert-manager)
+- Edge cases and error handling
+
 ## Acknowledgments
 
 This plugin was inspired by:

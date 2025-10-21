@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Run tests in watch mode (requires entr)"
+
+find lua/ tests/ -name '*.lua' | entr -c mise run test
